@@ -382,10 +382,11 @@ class Server
     /**
      * Returns the emails in the current mailbox as an array of ImapMessage objects.
      *
-     * @param  null|int  $limit
+     * @param  null|int $limit
+     * @param int $startAt
      * @return Message[]
      */
-    public function getMessages($limit = null)
+    public function getMessages($limit = null, $startAt = 1)
     {
         $numMessages = $this->numMessages();
 
@@ -397,7 +398,7 @@ class Server
 
         $stream   = $this->getImapStream();
         $messages = array();
-        for ($i = 1; $i <= $numMessages; $i++) {
+        for ($i = $startAt; $i <= $numMessages; $i++) {
             $uid        = imap_uid($stream, $i);
             $messages[] = new Message($uid, $this);
         }
@@ -413,13 +414,14 @@ class Server
      * @param  int       $orderBy
      * @param  bool      $reverse
      * @param  int       $limit
+     * @param  int       $startAt
      * @return Message[]
      */
-    public function getOrderedMessages($orderBy, $reverse, $limit)
+    public function getOrderedMessages($orderBy, $reverse, $limit, $startAt = 0)
     {
         $msgIds = imap_sort($this->getImapStream(), $orderBy, $reverse ? 1 : 0, SE_UID);
 
-        return array_map(array($this, 'getMessageByUid'), array_slice($msgIds, 0, $limit));
+        return array_map(array($this, 'getMessageByUid'), array_slice($msgIds, $startAt, $limit));
     }
 
     /**
