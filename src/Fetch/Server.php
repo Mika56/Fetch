@@ -147,11 +147,15 @@ class Server
      *
      * @param string $username
      * @param string $password
+     * @param bool   $tryFasterAuth tries to auth faster by disabling GSSAPI & NTLM auth methods (set to false if you use either of these auth methods)
      */
-    public function setAuthentication($username, $password)
+    public function setAuthentication($username, $password, $tryFasterAuth=true)
     {
         $this->username = $username;
         $this->password = $password;
+        if ($tryFasterAuth) {
+            $this->setParam('DISABLE_AUTHENTICATOR', array('GSSAPI','NTLM'));
+        }
     }
 
     /**
@@ -306,7 +310,7 @@ class Server
             if (!imap_reopen($this->imapStream, $this->getServerString(), $this->options, 1))
                 throw new \RuntimeException(imap_last_error());
         } else {
-            $imapStream = imap_open($this->getServerString(), $this->username, $this->password, $this->options, 1, $this->params);
+            $imapStream = @imap_open($this->getServerString(), $this->username, $this->password, $this->options, 1, $this->params);
 
             if ($imapStream === false)
                 throw new \RuntimeException(imap_last_error());
@@ -318,11 +322,22 @@ class Server
     /**
      * This returns the number of messages that the current mailbox contains.
      *
+     * @param  string $mailbox
      * @return int
      */
-    public function numMessages()
+    public function numMessages($mailbox='')
     {
-        return imap_num_msg($this->getImapStream());
+        $cnt = 0;
+        if ($mailbox==='') {
+            $cnt = imap_num_msg($this->getImapStream());
+        } elseif ($this->hasMailbox($mailbox) && $mailbox !== '') {
+            $oldMailbox = $this->getMailBox();
+            $this->setMailbox($mailbox);
+            $cnt = $this->numMessages();
+            $this->setMailbox($oldMailbox);
+        }
+
+        return ((int) $cnt);
     }
 
     /**
@@ -451,7 +466,7 @@ class Server
     *
     * @param $mailbox
     *
-    * @return bool
+    * @return array
     */
     public function getMailBoxDetails($mailbox)
     {

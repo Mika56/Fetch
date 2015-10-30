@@ -10,7 +10,6 @@
  */
 
 namespace Fetch;
-use Exception;
 
 /**
  * This library is a wrapper around the Imap library functions included in php. This class represents a single email
@@ -234,7 +233,7 @@ class Message
 
             return false;
 
-        $this->subject = isset($messageOverview->subject) ? imap_utf8($messageOverview->subject) : null;
+        $this->subject = MIME::decode($messageOverview->subject, self::$charset);
         $this->date    = strtotime($messageOverview->date);
         $this->size    = $messageOverview->size;
 
@@ -289,6 +288,9 @@ class Message
         if ($forceReload || !isset($this->messageOverview)) {
             // returns an array, and since we just want one message we can grab the only result
             $results               = imap_fetch_overview($this->imapStream, $this->uid, FT_UID);
+            if ( sizeof($results) == 0 ) {
+                throw new \RuntimeException('Error fetching overview');
+            }
             $this->messageOverview = array_shift($results);
             if ( ! isset($this->messageOverview->date)) {
                 $this->messageOverview->date = null;
@@ -513,26 +515,30 @@ class Message
             $this->attachments[] = $attachment;
         } elseif ($structure->type == 0 || $structure->type == 1) {
             $messageBody = isset($partIdentifier) ?
-                imap_fetchbody($this->imapStream, $this->uid, $partIdentifier, FT_UID)
-                : imap_body($this->imapStream, $this->uid, FT_UID);
+                imap_fetchbody($this->imapStream, $this->uid, $partIdentifier, FT_UID | FT_PEEK)
+                : imap_body($this->imapStream, $this->uid, FT_UID | FT_PEEK);
 
             $messageBody = self::decode($messageBody, $structure->encoding);
 
             if (!empty($parameters['charset']) && $parameters['charset'] !== self::$charset) {
                 $mb_converted = false;
                 if (function_exists('mb_convert_encoding')) {
-                    try {
-                        $messageBody = mb_convert_encoding($messageBody, self::$charset, $parameters['charset']);
-                        $mb_converted = true;
-                    } catch (Exception $e) {
-                        // @TODO Handle exception
+                    if (!in_array($parameters['charset'], mb_list_encodings())) {
+                        if ($structure->encoding === 0) {
+                            $parameters['charset'] = 'US-ASCII';
+                        } else {
+                            $parameters['charset'] = 'UTF-8';
+                        }
                     }
+
+                    $messageBody = @mb_convert_encoding($messageBody, self::$charset, $parameters['charset']);
+                    $mb_converted = true;
                 }
                 if (!$mb_converted) {
-                    try {
-                        $messageBody = iconv($parameters['charset'], self::$charset . self::$charsetFlag, $messageBody);
-                    } catch (Exception $e) {
-                        // @TODO Handle exception
+                    $messageBodyConv = @iconv($parameters['charset'], self::$charset . self::$charsetFlag, $messageBody);
+
+                    if ($messageBodyConv !== false) {
+                        $messageBody = $messageBodyConv;
                     }
                 }
             }
@@ -668,7 +674,7 @@ class Message
                     $currentAddress = array();
                     $currentAddress['address'] = $address->mailbox . '@' . $address->host;
                     if (isset($address->personal)) {
-                        $currentAddress['name'] = $address->personal;
+                        $currentAddress['name'] = MIME::decode($address->personal, self::$charset);
                     }
                     $outputAddresses[] = $currentAddress;
                 }
