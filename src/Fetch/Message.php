@@ -201,6 +201,8 @@ class Message
     const FLAG_SEEN = 'seen';
     const FLAG_DRAFT = 'draft';
 
+    private $isStructureLoaded = false;
+
     /**
      * This constructor takes in the uid for the message and the Imap class representing the mailbox the
      * message should be opened from. This constructor should generally not be called directly, but rather retrieved
@@ -233,8 +235,12 @@ class Message
 
             return false;
 
-        $this->subject = MIME::decode($messageOverview->subject, self::$charset);
-        $this->date    = strtotime($messageOverview->date);
+        if(isset($messageOverview->subject)){
+            $this->subject = MIME::decode($messageOverview->subject, self::$charset);
+        }
+        if(isset($messageOverview->date)){
+            $this->date    = strtotime($messageOverview->date);
+        }
         $this->size    = $messageOverview->size;
 
         foreach (self::$flagTypes as $flag)
@@ -258,19 +264,6 @@ class Message
 
         $this->from    = isset($headers->from) ? $this->processAddressObject($headers->from) : array('');
         $this->replyTo = isset($headers->reply_to) ? $this->processAddressObject($headers->reply_to) : $this->from;
-
-        /* Finally load the structure itself */
-
-        $structure = $this->getStructure();
-
-        if (!isset($structure->parts)) {
-            // not multipart
-            $this->processStructure($structure);
-        } else {
-            // multipart
-            foreach ($structure->parts as $id => $part)
-                $this->processStructure($part, $id + 1);
-        }
 
         return true;
     }
@@ -375,6 +368,9 @@ class Message
      */
     public function getMessageBody($html = false)
     {
+        if(!$this->isStructureLoaded){
+            $this->loadAndProcessStructure();
+        }
         if ($html) {
             if (!isset($this->htmlMessage) && isset($this->plaintextMessage)) {
                 $output = nl2br($this->plaintextMessage);
@@ -404,6 +400,9 @@ class Message
      */
     public function getPlainTextBody()
     {
+        if(!$this->isStructureLoaded){
+            $this->loadAndProcessStructure();
+        }
         return isset($this->plaintextMessage) ? $this->plaintextMessage : false;
     }
 
@@ -413,6 +412,9 @@ class Message
      */
     public function getHtmlBody()
     {
+        if(!$this->isStructureLoaded){
+            $this->loadAndProcessStructure();
+        }
         return isset($this->htmlMessage) ? $this->htmlMessage : false;
     }
 
@@ -793,5 +795,27 @@ class Message
         $this->imapConnection->setMailBox($currentBox);
 
         return $returnValue;
+    }
+
+    protected function loadAndProcessStructure()
+    {
+        /* Finally load the structure itself */
+
+        $structure = $this->getStructure();
+
+        if (!isset($structure->parts))
+        {
+            // not multipart
+            $this->processStructure($structure);
+        }
+        else
+        {
+            // multipart
+            foreach ($structure->parts as $id => $part)
+            {
+                $this->processStructure($part, $id + 1);
+            }
+        }
+        $this->isStructureLoaded = true;
     }
 }
