@@ -525,7 +525,7 @@ class Message
             if (!empty($parameters['charset']) && $parameters['charset'] !== self::$charset) {
                 $mb_converted = false;
                 if (function_exists('mb_convert_encoding')) {
-                    if (!in_array($parameters['charset'], mb_list_encodings())) {
+                    if (!in_array(strtolower($parameters['charset']), array_map('strtolower', mb_list_encodings()))) {
                         if ($structure->encoding === 0) {
                             $parameters['charset'] = 'US-ASCII';
                         } else {
@@ -545,7 +545,7 @@ class Message
                 }
             }
 
-            if (strtolower($structure->subtype) === 'plain' || ($structure->type == 1 && strtolower($structure->subtype) !== 'alternative')) {
+            if (strtolower($structure->subtype) === 'plain' || ($structure->type == 1 && !in_array(strtolower($structure->subtype), array('alternative', 'related')))) {
                 if (isset($this->plaintextMessage)) {
                     $this->plaintextMessage .= PHP_EOL . PHP_EOL;
                 } else {
