@@ -26,7 +26,7 @@ final class MIME
      *
      * @return string
      */
-    public static function decode($text, $targetCharset = 'utf-8//ignore')
+    public static function decode($text, $targetCharset = 'utf-8')
     {
         if (null === $text) {
             return null;
@@ -37,7 +37,7 @@ final class MIME
         foreach (imap_mime_header_decode($text) as $word) {
             $ch = 'default' === $word->charset ? 'ascii' : $word->charset;
 
-            $result.= mb_convert_encoding($word->text, $ch, $targetCharset);
+            $result.= mb_convert_encoding($word->text, $targetCharset, $ch);
         }
 
         return $result;
